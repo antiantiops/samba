@@ -175,5 +175,5 @@ docker pull quay.io/nimtechnology/samba
 
 ```plaintext
 helm package ./helm-chart/samba-server --destination ./helm-chart/
-helm repo index . --url  https://underndog.github.io/samba
+helm repo index . --url  https://antiantiops.github.io/samba
 ```
