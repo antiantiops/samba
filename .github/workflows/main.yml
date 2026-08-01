@@ -9,6 +9,7 @@ on:
 
 jobs:
   build-publish-containers:
+    if: github.actor != 'github-actions[bot]'
     name: Build and Publish Containers
     runs-on: ubuntu-latest
     strategy:

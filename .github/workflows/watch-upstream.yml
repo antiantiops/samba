@@ -1,0 +1,63 @@
+name: Watch Samba package
+
+on:
+  schedule:
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Read base image and chart version
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_image=$(awk 'toupper($1) == "FROM" { print $2; exit }' Dockerfile)
+          chart_version=$(sed -nE 's/^appVersion:[[:space:]]*"?([^"[:space:]]+)"?$/\1/p' helm-chart/samba-server/Chart.yaml)
+          test -n "$base_image"
+          test -n "$chart_version"
+          echo "base_image=$base_image" >> "$GITHUB_OUTPUT"
+          echo "chart_version=$chart_version" >> "$GITHUB_OUTPUT"
+
+      - name: Get available Samba package version
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=$(docker run --rm "${{ steps.current.outputs.base_image }}" sh -ec 'apk update >/dev/null && apk info -v samba | head -n1')
+          version=${package#samba-}
+          test "$version" != "$package"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch release when an update is available
+        if: steps.upstream.outputs.version != steps.current.outputs.chart_version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.upstream.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/release-samba.yaml/dispatches" \
+            --data "{\"ref\":\"${GITHUB_REF_NAME}\",\"inputs\":{\"samba_version\":\"${VERSION}\"}}"
+
+      - name: Report status
+        shell: bash
+        run: |
+          if [ "${{ steps.upstream.outputs.version }}" = "${{ steps.current.outputs.chart_version }}" ]; then
+            echo "Samba is current: ${{ steps.current.outputs.chart_version }}"
+          else
+            echo "Release dispatched: ${{ steps.current.outputs.chart_version }} -> ${{ steps.upstream.outputs.version }}"
+          fi
