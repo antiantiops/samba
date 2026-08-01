@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          package=$(docker run --rm "${{ steps.current.outputs.base_image }}" sh -ec 'apk update >/dev/null && apk info -v samba | head -n1')
+          package=$(docker run --rm "${{ steps.current.outputs.base_image }}" sh -ec 'apk add --no-cache samba >/dev/null && apk info -e -v samba')
           version=${package#samba-}
           test "$version" != "$package"
           echo "version=$version" >> "$GITHUB_OUTPUT"
